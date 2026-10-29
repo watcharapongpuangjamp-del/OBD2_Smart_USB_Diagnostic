@@ -1,0 +1,60 @@
+{
+  "entities": {
+    "Vehicle": {
+      "path": "users/{userId}/vehicles/{vehicleId}",
+      "ownerField": "userId",
+      "schema": {
+        "id": "string",
+        "make": "string",
+        "model": "string",
+        "year": "number",
+        "engine": "string",
+        "licensePlate": "string",
+        "vin": "string",
+        "currentMileageKm": "number",
+        "fuelType": "string",
+        "healthScore": "number",
+        "userId": "string",
+        "createdAt": "timestamp",
+        "updatedAt": "timestamp"
+      }
+    },
+    "MaintenanceLog": {
+      "path": "users/{userId}/maintenance_logs/{logId}",
+      "ownerField": "userId",
+      "schema": {
+        "id": "string",
+        "vehicleId": "string",
+        "serviceTypeTh": "string",
+        "serviceTypeEn": "string",
+        "mileageAtServiceKm": "number",
+        "nextServiceMileageKm": "number",
+        "serviceDate": "number",
+        "nextServiceDate": "number",
+        "costThb": "number",
+        "garageNameTh": "string",
+        "notes": "string",
+        "isCompleted": "boolean",
+        "userId": "string",
+        "createdAt": "timestamp",
+        "updatedAt": "timestamp"
+      }
+    },
+    "DiagnosticLog": {
+      "path": "users/{userId}/diagnostic_logs/{logId}",
+      "ownerField": "userId",
+      "schema": {
+        "id": "string",
+        "vehicleId": "string",
+        "dtcCode": "string",
+        "descriptionTh": "string",
+        "descriptionEn": "string",
+        "severity": "string",
+        "timestamp": "number",
+        "userId": "string",
+        "createdAt": "timestamp",
+        "updatedAt": "timestamp"
+      }
+    }
+  }
+}

@@ -1,0 +1,30 @@
+# Build & Output
+*.iml
+.gradle
+.kotlin
+/build
+/*/build
+/captures
+.externalNativeBuild
+.cxx
+.build-outputs
+
+# IDE & Config
+/.idea
+/.idea/caches
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+.DS_Store
+
+# Credentials & Sensitive Files
+local.properties
+/local.properties
+.env
+debug.keystore
+debug.keystore.base64
+
+# OS generated files
+Thumbs.db

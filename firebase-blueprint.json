@@ -1,0 +1,114 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User account details and settings",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Auth UID" },
+        "displayName": { "type": "string", "description": "User display name" },
+        "email": { "type": "string", "description": "User email address" },
+        "preferredLanguage": { "type": "string", "description": "EN or TH" },
+        "themeMode": { "type": "string", "description": "App theme mode" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "email"]
+    },
+    "Vehicle": {
+      "title": "Vehicle",
+      "description": "User vehicle profile",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner UID" },
+        "make": { "type": "string", "description": "Vehicle make" },
+        "model": { "type": "string", "description": "Vehicle model" },
+        "year": { "type": "integer", "description": "Manufacture year" },
+        "licensePlate": { "type": "string", "description": "License plate" },
+        "vin": { "type": "string", "description": "Vehicle Identification Number" },
+        "engine": { "type": "string", "description": "Engine type" },
+        "currentMileageKm": { "type": "integer", "description": "Current odometer mileage" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "make", "model", "year"]
+    },
+    "ScanRecord": {
+      "title": "ScanRecord",
+      "description": "OBD-II diagnostic scan history",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner UID" },
+        "vehicleId": { "type": "string", "description": "Associated vehicle ID" },
+        "dtcCodes": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Detected DTC fault codes"
+        },
+        "mileageAtScanKm": { "type": "integer", "description": "Odometer at time of scan" },
+        "isMilOn": { "type": "boolean", "description": "Malfunction Indicator Lamp status" },
+        "freezeFrameJson": { "type": "string", "description": "JSON string of freeze frame data" },
+        "notes": { "type": "string", "description": "Diagnostic notes" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "vehicleId"]
+    },
+    "MaintenanceLog": {
+      "title": "MaintenanceLog",
+      "description": "Vehicle maintenance & service history",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner UID" },
+        "vehicleId": { "type": "string", "description": "Associated vehicle ID" },
+        "serviceName": { "type": "string", "description": "Name of service or part replacement" },
+        "serviceType": { "type": "string", "description": "Service category" },
+        "costThb": { "type": "integer", "description": "Cost in Thai Baht" },
+        "mileageKm": { "type": "integer", "description": "Odometer mileage at service" },
+        "serviceDate": { "type": "string", "description": "Date string" },
+        "notes": { "type": "string", "description": "Additional notes" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "vehicleId", "serviceName"]
+    },
+    "TelemetrySnapshot": {
+      "title": "TelemetrySnapshot",
+      "description": "Saved live engine sensor snapshot",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner UID" },
+        "vehicleId": { "type": "string", "description": "Associated vehicle ID" },
+        "snapshotName": { "type": "string", "description": "Label for snapshot" },
+        "coolantTempCelsius": { "type": "integer" },
+        "engineRpm": { "type": "integer" },
+        "vehicleSpeedKmh": { "type": "integer" },
+        "fuelRailPressureBar": { "type": "integer" },
+        "batteryVoltage": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "vehicleId", "snapshotName"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "User account document"
+    },
+    "/users/{userId}/vehicles/{vehicleId}": {
+      "schema": { "$ref": "#/entities/Vehicle" },
+      "description": "User vehicles collection"
+    },
+    "/users/{userId}/scan_records/{scanRecordId}": {
+      "schema": { "$ref": "#/entities/ScanRecord" },
+      "description": "Diagnostic scan history collection"
+    },
+    "/users/{userId}/maintenance_logs/{logId}": {
+      "schema": { "$ref": "#/entities/MaintenanceLog" },
+      "description": "Vehicle maintenance history collection"
+    },
+    "/users/{userId}/telemetry_snapshots/{snapshotId}": {
+      "schema": { "$ref": "#/entities/TelemetrySnapshot" },
+      "description": "Saved sensor snapshot collection"
+    }
+  }
+}

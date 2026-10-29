@@ -1,0 +1,46 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function isValidVehicle(data) {
+      return data.keys().hasAll(['make', 'model', 'userId']) &&
+             data.userId == request.auth.uid &&
+             data.make is string && data.make.size() > 0 &&
+             data.model is string && data.model.size() > 0;
+    }
+
+    function isValidMaintenanceLog(data) {
+      return data.keys().hasAll(['vehicleId', 'serviceTypeTh', 'userId']) &&
+             data.userId == request.auth.uid &&
+             data.vehicleId is string &&
+             data.serviceTypeTh is string;
+    }
+
+    function isValidDiagnosticLog(data) {
+      return data.keys().hasAll(['vehicleId', 'dtcCode', 'userId']) &&
+             data.userId == request.auth.uid &&
+             data.vehicleId is string &&
+             data.dtcCode is string;
+    }
+
+    match /users/{userId}/vehicles/{vehicleId} {
+      allow read, write: if isOwner(userId) && (resource == null || isValidVehicle(resource.data)) && (request.resource == null || isValidVehicle(request.resource.data));
+    }
+
+    match /users/{userId}/maintenance_logs/{logId} {
+      allow read, write: if isOwner(userId) && (resource == null || isValidMaintenanceLog(resource.data)) && (request.resource == null || isValidMaintenanceLog(request.resource.data));
+    }
+
+    match /users/{userId}/diagnostic_logs/{logId} {
+      allow read, write: if isOwner(userId) && (resource == null || isValidDiagnosticLog(resource.data)) && (request.resource == null || isValidDiagnosticLog(request.resource.data));
+    }
+  }
+}

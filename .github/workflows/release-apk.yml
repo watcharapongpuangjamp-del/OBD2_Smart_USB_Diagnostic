@@ -1,0 +1,113 @@
+name: Release APK on Tag
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag_name:
+        description: "ชื่อ Release Tag (เช่น v2.5.0)"
+        required: true
+        default: "v2.5.0"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build & Create GitHub Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: ☕ Set up JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'gradle'
+
+      - name: 📱 Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools platforms;android-34 build-tools;34.0.0
+
+      - name: 🐘 Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.3.1'
+
+      - name: 🔐 Prepare Environment
+        run: |
+          if [ ! -f .env ]; then
+            cp .env.example .env
+          fi
+          if [ -n "${{ secrets.GEMINI_API_KEY }}" ]; then
+            echo "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" >> .env
+          fi
+
+      - name: 🔑 Prepare Keystore Signing
+        run: |
+          if [ ! -f debug.keystore ] && [ -f debug.keystore.base64 ]; then
+            base64 -d debug.keystore.base64 > debug.keystore
+          elif [ ! -f debug.keystore ]; then
+            keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          fi
+
+          if [ -n "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" ]; then
+            echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 -d > my-upload-key.jks
+            echo "KEYSTORE_PATH=$GITHUB_WORKSPACE/my-upload-key.jks" >> $GITHUB_ENV
+            echo "STORE_PASSWORD=${{ secrets.RELEASE_KEYSTORE_PASSWORD }}" >> $GITHUB_ENV
+            echo "KEY_PASSWORD=${{ secrets.RELEASE_KEY_PASSWORD }}" >> $GITHUB_ENV
+          else
+            echo "KEYSTORE_PATH=$GITHUB_WORKSPACE/debug.keystore" >> $GITHUB_ENV
+            echo "STORE_PASSWORD=android" >> $GITHUB_ENV
+            echo "KEY_PASSWORD=android" >> $GITHUB_ENV
+          fi
+
+      - name: 🛡️ Grant Execute Permissions to Gradlew
+        run: chmod +x ./gradlew
+
+      - name: 🔨 Build Both Debug and Release APKs
+        run: |
+          ./gradlew assembleDebug assembleRelease --stacktrace
+          
+          mkdir -p release-assets
+          
+          # Copy Debug APK
+          if [ -f app/build/outputs/apk/debug/app-debug.apk ]; then
+            cp app/build/outputs/apk/debug/app-debug.apk release-assets/ThaiAutoOBD-debug.apk
+          fi
+          
+          # Copy Release APK
+          if [ -f app/build/outputs/apk/release/app-release.apk ]; then
+            cp app/build/outputs/apk/release/app-release.apk release-assets/ThaiAutoOBD-release.apk
+          fi
+
+      - name: 🚀 Create GitHub Release & Upload APKs
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name || github.event.inputs.tag_name }}
+          name: "Release ${{ github.ref_name || github.event.inputs.tag_name }}"
+          body: |
+            ## 🚗 Thai Auto OBD Diagnostics & Telemetry
+            
+            ### 📦 ไฟล์ติดตั้ง APK (Download Links):
+            - **ThaiAutoOBD-debug.apk** : ติดตั้งและทดสอบได้ทันทีบนอุปกรณ์ Android ทุกรุ่น
+            - **ThaiAutoOBD-release.apk** : แพ็กเกจ Optimized สำหรับการใช้งานจริง
+            
+            ### 🌟 ฟีเจอร์หลักในเวอร์ชันนี้:
+            - **Vehicle-Agnostic Diagnostic Engine**: ตรวจจับโปรโตคอล OBD-II / ELM327 และอ่านค่า ECU อัตโนมัติ
+            - **Live Sensor Telemetry & Gauges**: เกจวัดเข็ม RPM, Speed, Coolant Temp, Fuel Rail Pressure และกราฟแนวโน้มแบบสด
+            - **Push Notification System**: ระบบแจ้งเตือนอุณหภูมิความร้อนสูง, เตือนรอบบำรุงรักษา และรายงานผลการสแกน
+            - **Interactive DTC Multimeter Guide**: คู่มือช่างตรวจเช็กรายโค้ด พร้อมสเปกวัดแรงดัน (V) และความต้านทาน (Ω)
+            - **Expanded Thai Vehicles & Pre-2000 Support**: ฐานข้อมูลรถยอดนิยมในไทย พร้อมผังแปลงขั้ว OBD-I (Toyota 17/22 พิน, Honda 3 พิน, Isuzu 3 พิน)
+            - **VIN Camera Scanner**: สแกนหมายเลขตัวถังและถอดรหัส WMI ในไทย
+          files: |
+            release-assets/*.apk
+          draft: false
+          prerelease: false

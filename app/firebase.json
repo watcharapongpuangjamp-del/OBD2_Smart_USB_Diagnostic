@@ -1,0 +1,6 @@
+{
+  "firestore": {
+    "rules": "firestore.rules",
+    "database": "ai-studio-android-thaiauto-e6f28652-26d4-48c6-bd45-28409d4658b4"
+  }
+}

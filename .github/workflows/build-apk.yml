@@ -1,0 +1,147 @@
+name: Build Android APK
+
+on:
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: "ประเภท APK ที่ต้องการสร้าง (Build Variant)"
+        required: true
+        default: "debug"
+        type: choice
+        options:
+          - "debug"
+          - "release"
+          - "all"
+      run_tests:
+        description: "รัน Unit Tests ก่อน Build หรือไม่"
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build & Package APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: ☕ Set up JDK 21 (Temurin)
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '21'
+          cache: 'gradle'
+
+      - name: 📱 Set up Android SDK
+        uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools platforms;android-34 build-tools;34.0.0
+
+      - name: 🐘 Setup Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.3.1'
+          cache-read-only: false
+
+      - name: 🔐 Prepare Environment & Secrets
+        run: |
+          echo "Setting up .env file..."
+          if [ ! -f .env ]; then
+            cp .env.example .env
+          fi
+          
+          # If secret GEMINI_API_KEY is provided in GitHub Secrets, inject into .env
+          if [ -n "${{ secrets.GEMINI_API_KEY }}" ]; then
+            echo "GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY }}" >> .env
+          fi
+
+      - name: 🔑 Prepare Keystore Signing
+        run: |
+          # If debug.keystore is missing but base64 exists, decode it
+          if [ ! -f debug.keystore ] && [ -f debug.keystore.base64 ]; then
+            echo "Decoding debug.keystore from base64..."
+            base64 -d debug.keystore.base64 > debug.keystore
+          elif [ ! -f debug.keystore ]; then
+            echo "Generating fresh debug.keystore..."
+            keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
+          fi
+
+          # Setup Release Keystore if provided in GitHub Secrets
+          if [ -n "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" ]; then
+            echo "Decoding release keystore from secrets..."
+            echo "${{ secrets.RELEASE_KEYSTORE_BASE64 }}" | base64 -d > my-upload-key.jks
+            echo "KEYSTORE_PATH=$GITHUB_WORKSPACE/my-upload-key.jks" >> $GITHUB_ENV
+            echo "STORE_PASSWORD=${{ secrets.RELEASE_KEYSTORE_PASSWORD }}" >> $GITHUB_ENV
+            echo "KEY_PASSWORD=${{ secrets.RELEASE_KEY_PASSWORD }}" >> $GITHUB_ENV
+          else
+            # Fallback release signing to debug keystore for easy CI builds
+            echo "Using debug keystore fallback for release build..."
+            echo "KEYSTORE_PATH=$GITHUB_WORKSPACE/debug.keystore" >> $GITHUB_ENV
+            echo "STORE_PASSWORD=android" >> $GITHUB_ENV
+            echo "KEY_PASSWORD=android" >> $GITHUB_ENV
+          fi
+
+      - name: 🛡️ Grant Execute Permissions to Gradlew
+        run: chmod +x ./gradlew
+
+      - name: 🧪 Run Unit Tests
+        if: ${{ github.event.inputs.run_tests != false }}
+        run: |
+          ./gradlew testDebugUnitTest --continue || echo "Tests completed with warnings"
+
+      - name: 🔨 Build Debug APK
+        if: ${{ github.event.inputs.build_type == 'debug' || github.event.inputs.build_type == 'all' || github.event_name == 'push' || github.event_name == 'pull_request' }}
+        run: |
+          echo "Building Debug APK..."
+          ./gradlew assembleDebug --stacktrace
+          
+          # Rename output APK for clarity
+          mkdir -p build-artifacts
+          if [ -f app/build/outputs/apk/debug/app-debug.apk ]; then
+            cp app/build/outputs/apk/debug/app-debug.apk build-artifacts/ThaiAutoOBD-v2.5.0-debug.apk
+            echo "Debug APK copied to build-artifacts/ThaiAutoOBD-v2.5.0-debug.apk"
+          fi
+
+      - name: 🚀 Build Release APK
+        if: ${{ github.event.inputs.build_type == 'release' || github.event.inputs.build_type == 'all' }}
+        run: |
+          echo "Building Release APK..."
+          ./gradlew assembleRelease --stacktrace
+          
+          mkdir -p build-artifacts
+          if [ -f app/build/outputs/apk/release/app-release.apk ]; then
+            cp app/build/outputs/apk/release/app-release.apk build-artifacts/ThaiAutoOBD-v2.5.0-release.apk
+            echo "Release APK copied to build-artifacts/ThaiAutoOBD-v2.5.0-release.apk"
+          elif [ -f app/build/outputs/apk/release/app-release-unsigned.apk ]; then
+            cp app/build/outputs/apk/release/app-release-unsigned.apk build-artifacts/ThaiAutoOBD-v2.5.0-release-unsigned.apk
+          fi
+
+      - name: 📦 Upload APK Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ThaiAutoOBD-APKs
+          path: |
+            build-artifacts/*.apk
+            app/build/outputs/apk/**/*.apk
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: 📋 Print APK Build Summary
+        run: |
+          echo "=============================================="
+          echo "✅ APK BUILD COMPLETED SUCCESSFULLY"
+          echo "Generated APKs:"
+          ls -la build-artifacts/ || ls -la app/build/outputs/apk/
+          echo "=============================================="

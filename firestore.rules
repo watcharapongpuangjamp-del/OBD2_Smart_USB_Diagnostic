@@ -1,0 +1,154 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() > 0 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidUserProfile(data) {
+      return data.userId is string && data.userId == request.auth.uid &&
+             data.email is string && data.email.size() > 0 && data.email.size() <= 200 &&
+             (!('displayName' in data) || data.displayName == null || (data.displayName is string && data.displayName.size() <= 100)) &&
+             (!('preferredLanguage' in data) || data.preferredLanguage == null || (data.preferredLanguage is string && data.preferredLanguage.size() <= 10)) &&
+             (!('themeMode' in data) || data.themeMode == null || (data.themeMode is string && data.themeMode.size() <= 20));
+    }
+
+    function isValidVehicle(data) {
+      return data.userId is string && data.userId == request.auth.uid &&
+             data.make is string && data.make.size() > 0 && data.make.size() <= 100 &&
+             data.model is string && data.model.size() > 0 && data.model.size() <= 100 &&
+             data.year is int && data.year >= 1900 && data.year <= 2100 &&
+             (!('licensePlate' in data) || data.licensePlate == null || (data.licensePlate is string && data.licensePlate.size() <= 50)) &&
+             (!('vin' in data) || data.vin == null || (data.vin is string && data.vin.size() <= 50)) &&
+             (!('engine' in data) || data.engine == null || (data.engine is string && data.engine.size() <= 100)) &&
+             (!('currentMileageKm' in data) || data.currentMileageKm == null || data.currentMileageKm is int);
+    }
+
+    function isValidScanRecord(data) {
+      return data.userId is string && data.userId == request.auth.uid &&
+             data.vehicleId is string && data.vehicleId.size() > 0 &&
+             (!('dtcCodes' in data) || data.dtcCodes == null || (data.dtcCodes is list && data.dtcCodes.size() <= 50)) &&
+             (!('mileageAtScanKm' in data) || data.mileageAtScanKm == null || data.mileageAtScanKm is int) &&
+             (!('isMilOn' in data) || data.isMilOn == null || data.isMilOn is bool) &&
+             (!('freezeFrameJson' in data) || data.freezeFrameJson == null || (data.freezeFrameJson is string && data.freezeFrameJson.size() <= 10000)) &&
+             (!('notes' in data) || data.notes == null || (data.notes is string && data.notes.size() <= 2000));
+    }
+
+    function isValidMaintenanceLog(data) {
+      return data.userId is string && data.userId == request.auth.uid &&
+             data.vehicleId is string && data.vehicleId.size() > 0 &&
+             data.serviceName is string && data.serviceName.size() > 0 && data.serviceName.size() <= 200 &&
+             (!('serviceType' in data) || data.serviceType == null || (data.serviceType is string && data.serviceType.size() <= 100)) &&
+             (!('costThb' in data) || data.costThb == null || data.costThb is int) &&
+             (!('mileageKm' in data) || data.mileageKm == null || data.mileageKm is int) &&
+             (!('serviceDate' in data) || data.serviceDate == null || (data.serviceDate is string && data.serviceDate.size() <= 50)) &&
+             (!('notes' in data) || data.notes == null || (data.notes is string && data.notes.size() <= 2000));
+    }
+
+    function isValidTelemetrySnapshot(data) {
+      return data.userId is string && data.userId == request.auth.uid &&
+             data.vehicleId is string && data.vehicleId.size() > 0 &&
+             data.snapshotName is string && data.snapshotName.size() > 0 && data.snapshotName.size() <= 100 &&
+             (!('coolantTempCelsius' in data) || data.coolantTempCelsius == null || data.coolantTempCelsius is int) &&
+             (!('engineRpm' in data) || data.engineRpm == null || data.engineRpm is int) &&
+             (!('vehicleSpeedKmh' in data) || data.vehicleSpeedKmh == null || data.vehicleSpeedKmh is int) &&
+             (!('fuelRailPressureBar' in data) || data.fuelRailPressureBar == null || data.fuelRailPressureBar is int) &&
+             (!('batteryVoltage' in data) || data.batteryVoltage == null || data.batteryVoltage is number);
+    }
+
+    // Match users collection
+    match /users/{userId} {
+      allow get, list: if isOwner(userId);
+      allow create: if isOwner(userId) &&
+                       incoming().userId == request.auth.uid &&
+                       (!('createdAt' in incoming()) || (incoming().createdAt is timestamp && incoming().createdAt <= request.time)) &&
+                       isValidUserProfile(incoming());
+      allow update: if isOwner(userId) &&
+                       incoming().userId == existing().userId &&
+                       isValidUserProfile(incoming());
+      allow delete: if isOwner(userId);
+
+      // Subcollection: vehicles
+      match /vehicles/{vehicleId} {
+        allow get, list: if isOwner(userId);
+        allow create: if isOwner(userId) &&
+                         isValidId(vehicleId) &&
+                         incoming().userId == request.auth.uid &&
+                         (!('createdAt' in incoming()) || (incoming().createdAt is timestamp && incoming().createdAt <= request.time)) &&
+                         isValidVehicle(incoming());
+        allow update: if isOwner(userId) &&
+                         isValidId(vehicleId) &&
+                         incoming().userId == existing().userId &&
+                         isValidVehicle(incoming());
+        allow delete: if isOwner(userId) && isValidId(vehicleId);
+      }
+
+      // Subcollection: scan_records
+      match /scan_records/{scanRecordId} {
+        allow get, list: if isOwner(userId);
+        allow create: if isOwner(userId) &&
+                         isValidId(scanRecordId) &&
+                         incoming().userId == request.auth.uid &&
+                         (!('createdAt' in incoming()) || (incoming().createdAt is timestamp && incoming().createdAt <= request.time)) &&
+                         isValidScanRecord(incoming());
+        allow update: if isOwner(userId) &&
+                         isValidId(scanRecordId) &&
+                         incoming().userId == existing().userId &&
+                         isValidScanRecord(incoming());
+        allow delete: if isOwner(userId) && isValidId(scanRecordId);
+      }
+
+      // Subcollection: maintenance_logs
+      match /maintenance_logs/{logId} {
+        allow get, list: if isOwner(userId);
+        allow create: if isOwner(userId) &&
+                         isValidId(logId) &&
+                         incoming().userId == request.auth.uid &&
+                         (!('createdAt' in incoming()) || (incoming().createdAt is timestamp && incoming().createdAt <= request.time)) &&
+                         isValidMaintenanceLog(incoming());
+        allow update: if isOwner(userId) &&
+                         isValidId(logId) &&
+                         incoming().userId == existing().userId &&
+                         isValidMaintenanceLog(incoming());
+        allow delete: if isOwner(userId) && isValidId(logId);
+      }
+
+      // Subcollection: telemetry_snapshots
+      match /telemetry_snapshots/{snapshotId} {
+        allow get, list: if isOwner(userId);
+        allow create: if isOwner(userId) &&
+                         isValidId(snapshotId) &&
+                         incoming().userId == request.auth.uid &&
+                         (!('createdAt' in incoming()) || (incoming().createdAt is timestamp && incoming().createdAt <= request.time)) &&
+                         isValidTelemetrySnapshot(incoming());
+        allow update: if isOwner(userId) &&
+                         isValidId(snapshotId) &&
+                         incoming().userId == existing().userId &&
+                         isValidTelemetrySnapshot(incoming());
+        allow delete: if isOwner(userId) && isValidId(snapshotId);
+      }
+    }
+
+    // Default deny all other paths
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "name": "Thai Auto OBD-II Pro",
+  "description": "Comprehensive Android OBD-II diagnostics, DTC fault code scanner, live engine telemetry, AI mechanic troubleshooting, and maintenance history for Thai vehicles.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
