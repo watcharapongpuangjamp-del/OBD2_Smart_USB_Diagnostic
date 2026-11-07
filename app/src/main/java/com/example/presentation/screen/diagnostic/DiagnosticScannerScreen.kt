@@ -62,13 +62,16 @@ import com.example.presentation.common.components.CyberGreen
 import com.example.presentation.common.components.CyberRed
 import com.example.presentation.common.components.GlassmorphicCard
 import com.example.presentation.common.components.StatusBadge
+import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
+import androidx.compose.material.icons.filled.Search
 import com.example.presentation.common.components.TextMuted
 
 @Composable
 fun DiagnosticScannerScreen(
     state: DiagnosticScannerUiState,
     onEvent: (DiagnosticScannerUiEvent) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onNavigateToDtcDatabase: (() -> Unit)? = null
 ) {
     Column(
         modifier = modifier
@@ -82,6 +85,7 @@ fun DiagnosticScannerScreen(
             modifier = Modifier.fillMaxWidth(),
             borderColor = if (state.criticalCount > 0) CyberRed.copy(alpha = 0.5f) else CyberCyan.copy(alpha = 0.3f)
         ) {
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -216,7 +220,57 @@ fun DiagnosticScannerScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        // Offline DTC Database Banner Button
+        if (onNavigateToDtcDatabase != null) {
+            Surface(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 10.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .clickable { onNavigateToDtcDatabase() }
+                    .testTag("btn_banner_offline_dtc_db"),
+                shape = RoundedCornerShape(12.dp),
+                color = Color(0xFF131D28),
+                border = androidx.compose.foundation.BorderStroke(1.dp, CyberCyan.copy(alpha = 0.5f))
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = null,
+                            tint = CyberCyan,
+                            modifier = Modifier.size(20.dp)
+                        )
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                text = "ค้นหาความหมายรหัส DTC (ฐานข้อมูลออฟไลน์ Room)",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp
+                            )
+                            Text(
+                                text = "เปิดดูความหมาย อาการ สาเหตุ และวิธีแก้ปัญหาแม้ออฟไลน์",
+                                color = TextMuted,
+                                fontSize = 11.sp
+                            )
+                        }
+                    }
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
+                        contentDescription = "Go",
+                        tint = CyberCyan,
+                        modifier = Modifier.size(14.dp)
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
 
         // System Category Filter Chips
         LazyRow(

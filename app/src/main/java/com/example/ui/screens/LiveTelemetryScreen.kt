@@ -19,12 +19,16 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ElectricBolt
 import androidx.compose.material.icons.filled.LocalGasStation
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.PowerSettingsNew
 import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.automirrored.filled.ShowChart
 import androidx.compose.material.icons.filled.Speed
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Thermostat
@@ -36,8 +40,10 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ScrollableTabRow
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -96,6 +102,7 @@ fun LiveTelemetryScreen(
     val gaugeFont = getGaugeFontFamily(uiCustomization.gaugeFont)
 
     var selectedTelemetryCategory by remember { mutableStateOf(TelemetryCategory.ALL) }
+    var showD3DashboardDialog by remember { mutableStateOf(false) }
 
     LazyColumn(
         modifier = modifier
@@ -105,41 +112,62 @@ fun LiveTelemetryScreen(
     ) {
         item { Spacer(modifier = Modifier.height(4.dp)) }
 
-        // Quick Mode Action Bar (HUD Display & OEM Baseline Comparison)
+        // Quick Mode Action Bar (HUD Display, OEM Baseline Comparison, & D3 Interactive Charts)
         item {
-            Row(
+            Column(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Button(
-                    onClick = { viewModel.setShowHudDialog(true) },
-                    modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = AutoCyan)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Icon(Icons.Default.Speed, contentDescription = null, tint = Color.Black, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        text = if (isTh) "โหมด HUD สะท้อนกระจก" else "HUD Mirror Mode",
-                        color = Color.Black,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 12.sp
-                    )
+                    Button(
+                        onClick = { viewModel.setShowHudDialog(true) },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = AutoCyan)
+                    ) {
+                        Icon(Icons.Default.Speed, contentDescription = null, tint = Color.Black, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = if (isTh) "โหมด HUD สะท้อนกระจก" else "HUD Mirror Mode",
+                            color = Color.Black,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp
+                        )
+                    }
+
+                    Button(
+                        onClick = { viewModel.setShowBaselineDialog(true) },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = AutoGreen)
+                    ) {
+                        Icon(Icons.Default.Tune, contentDescription = null, tint = Color.Black, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = if (isTh) "เปรียบเทียบค่า OEM" else "OEM Baseline",
+                            color = Color.Black,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp
+                        )
+                    }
                 }
 
                 Button(
-                    onClick = { viewModel.setShowBaselineDialog(true) },
-                    modifier = Modifier.weight(1f),
+                    onClick = { showD3DashboardDialog = true },
+                    modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = AutoGreen)
+                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF6C5CE7))
                 ) {
-                    Icon(Icons.Default.Tune, contentDescription = null, tint = Color.Black, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
+                    Icon(Icons.AutoMirrored.Filled.ShowChart, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = if (isTh) "เปรียบเทียบค่า OEM" else "OEM Baseline",
-                        color = Color.Black,
+                        text = if (isTh) "เปิดแดชบอร์ดกราฟ D3 (ปรับแต่งได้)" else "Open D3 Interactive Charts Dashboard",
+                        color = Color.White,
                         fontWeight = FontWeight.Bold,
-                        fontSize = 12.sp
+                        fontSize = 13.sp
                     )
                 }
             }
@@ -755,6 +783,44 @@ fun LiveTelemetryScreen(
         }
 
         item { Spacer(modifier = Modifier.height(24.dp)) }
+    }
+
+    if (showD3DashboardDialog) {
+        Dialog(
+            onDismissRequest = { showD3DashboardDialog = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            val cleanDashboardVm = remember {
+                val repo = com.example.data.repository.ObdDiagnosticRepositoryImpl()
+                com.example.presentation.screen.dashboard.TelemetryDashboardViewModel(
+                    streamLiveTelemetryUseCase = com.example.domain.usecase.StreamLiveTelemetryUseCase(repo)
+                )
+            }
+            val cleanDashboardState by cleanDashboardVm.uiState.collectAsState()
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.background)
+            ) {
+                com.example.presentation.screen.dashboard.TelemetryDashboardScreen(
+                    state = cleanDashboardState,
+                    onEvent = cleanDashboardVm::onEvent
+                )
+                IconButton(
+                    onClick = { showD3DashboardDialog = false },
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(top = 16.dp, end = 16.dp)
+                        .background(Color.Black.copy(alpha = 0.65f), RoundedCornerShape(12.dp))
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Close Dashboard",
+                        tint = Color.White
+                    )
+                }
+            }
+        }
     }
 }
 

@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.HourglassTop
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Layers
 import com.example.presentation.common.components.CyberCyan
@@ -190,6 +191,22 @@ fun MainAppContent(viewModel: MainViewModel) {
     var showSettingsDialog by remember { mutableStateOf(false) }
     var showUiCustomizationDialog by remember { mutableStateOf(false) }
     var isCleanArchMode by remember { mutableStateOf(false) }
+    var showDtcSearchScreen by remember { mutableStateOf(false) }
+
+    val context = LocalContext.current
+
+    // Offline Room SQLite DTC Search Clean Architecture ViewModel
+    val dtcSearchVm = remember {
+        val db = com.example.data.local.AppDatabase.getDatabase(context)
+        val repo = com.example.data.repository.DtcRepositoryImpl(db.dtcDao())
+        com.example.presentation.screen.dtc.DtcSearchViewModel(
+            searchDtcUseCase = com.example.domain.usecase.SearchDtcUseCase(repo),
+            getDtcDetailsUseCase = com.example.domain.usecase.GetDtcDetailsUseCase(repo),
+            seedDtcDatabaseUseCase = com.example.domain.usecase.SeedDtcDatabaseUseCase(repo)
+        )
+    }
+    val dtcSearchState by dtcSearchVm.uiState.collectAsState()
+
     val showHudDialog by viewModel.showHudDialog.collectAsState()
     val showBaselineDialog by viewModel.showBaselineDialog.collectAsState()
     val showSnapshotDialog by viewModel.showSnapshotDialog.collectAsState()
@@ -198,16 +215,20 @@ fun MainAppContent(viewModel: MainViewModel) {
     val isUsbConnected by viewModel.isUsbConnected.collectAsState()
     val isUsbConnecting by viewModel.isUsbConnecting.collectAsState()
 
-    val context = LocalContext.current
     var backPressedTime by remember { mutableLongStateOf(0L) }
 
+    // Handle back button when DTC search screen is open
+    BackHandler(enabled = showDtcSearchScreen) {
+        showDtcSearchScreen = false
+    }
+
     // Handle physical / gesture back button to return to Home tab if not on Home
-    BackHandler(enabled = currentTab != 0) {
+    BackHandler(enabled = !showDtcSearchScreen && currentTab != 0) {
         viewModel.setTab(0)
     }
 
     // Double back press to exit app when on Home tab
-    BackHandler(enabled = currentTab == 0) {
+    BackHandler(enabled = !showDtcSearchScreen && currentTab == 0) {
         val currentTime = System.currentTimeMillis()
         if (currentTime - backPressedTime < 2000L) {
             (context as? Activity)?.finish()
@@ -291,14 +312,29 @@ fun MainAppContent(viewModel: MainViewModel) {
                                 .background(AutoGreen)
                         )
                         Text(
-                            text = if (isTh) " สแกนรถยนต์ไทย OBD2" else " Thai Car OBD-II Pro",
+                            text = if (showDtcSearchScreen) {
+                                if (isTh) " ค้นหารหัส DTC (ออฟไลน์)" else " Offline DTC Lookup"
+                            } else {
+                                if (isTh) " สแกนรถยนต์ไทย OBD2" else " Thai Car OBD-II Pro"
+                            },
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold
                         )
                     }
                 },
                 navigationIcon = {
-                    if (currentTab != 0) {
+                    if (showDtcSearchScreen) {
+                        IconButton(
+                            onClick = { showDtcSearchScreen = false },
+                            modifier = Modifier.testTag("btn_back_from_dtc_search")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.ArrowBack,
+                                contentDescription = "Back",
+                                tint = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    } else if (currentTab != 0) {
                         IconButton(
                             onClick = { viewModel.setTab(0) },
                             modifier = Modifier.testTag("btn_back_home")
@@ -312,6 +348,18 @@ fun MainAppContent(viewModel: MainViewModel) {
                     }
                 },
                 actions = {
+                    // Offline DTC Database Search Action Button
+                    IconButton(
+                        onClick = { showDtcSearchScreen = !showDtcSearchScreen },
+                        modifier = Modifier.testTag("btn_open_dtc_search")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = "Search Offline DTC Database",
+                            tint = if (showDtcSearchScreen) CyberCyan else AutoCyan
+                        )
+                    }
+
                     // Profile Button
                     IconButton(
                         onClick = { viewModel.setTab(8) },
@@ -579,77 +627,86 @@ fun MainAppContent(viewModel: MainViewModel) {
             }
         }
     ) { innerPadding ->
-        Crossfade(
-            targetState = currentTab,
-            modifier = Modifier.padding(innerPadding)
-        ) { tab ->
-            when (tab) {
-                0 -> HomeScreen(viewModel = viewModel)
-                1 -> {
-                    if (isCleanArchMode) {
-                        val cleanScannerVm = remember {
-                            val repo = com.example.data.repository.ObdDiagnosticRepositoryImpl(
-                                dtcDatabase = com.example.data.repository.DtcDatabase
-                            )
-                            val pdfRepo = com.example.data.repository.PdfReportRepositoryImpl(context)
-                            com.example.presentation.screen.diagnostic.DiagnosticScannerViewModel(
-                                scanDtcCodesUseCase = com.example.domain.usecase.ScanDtcCodesUseCase(repo),
-                                clearDtcCodesUseCase = com.example.domain.usecase.ClearDtcCodesUseCase(repo),
-                                exportDiagnosticPdfUseCase = com.example.domain.usecase.ExportDiagnosticPdfUseCase(pdfRepo)
-                            )
-                        }
-                        val cleanState by cleanScannerVm.uiState.collectAsState()
+        if (showDtcSearchScreen) {
+            Box(modifier = Modifier.padding(innerPadding)) {
+                com.example.presentation.screen.dtc.DtcSearchScreen(
+                    state = dtcSearchState,
+                    onEvent = dtcSearchVm::onEvent
+                )
+            }
+        } else {
+            Crossfade(
+                targetState = currentTab,
+                modifier = Modifier.padding(innerPadding)
+            ) { tab ->
+                when (tab) {
+                    0 -> HomeScreen(viewModel = viewModel)
+                    1 -> {
+                        if (isCleanArchMode) {
+                            val cleanScannerVm = remember {
+                                val repo = com.example.data.repository.ObdDiagnosticRepositoryImpl(
+                                    dtcDatabase = com.example.data.repository.DtcDatabase
+                                )
+                                val pdfRepo = com.example.data.repository.PdfReportRepositoryImpl(context)
+                                com.example.presentation.screen.diagnostic.DiagnosticScannerViewModel(
+                                    scanDtcCodesUseCase = com.example.domain.usecase.ScanDtcCodesUseCase(repo),
+                                    clearDtcCodesUseCase = com.example.domain.usecase.ClearDtcCodesUseCase(repo),
+                                    exportDiagnosticPdfUseCase = com.example.domain.usecase.ExportDiagnosticPdfUseCase(pdfRepo)
+                                )
+                            }
+                            val cleanState by cleanScannerVm.uiState.collectAsState()
 
-                        androidx.compose.runtime.LaunchedEffect(cleanScannerVm) {
-                            cleanScannerVm.uiEffect.collect { effect ->
-                                when (effect) {
-                                    is com.example.presentation.screen.diagnostic.DiagnosticScannerUiEffect.SharePdfFile -> {
-                                        try {
-                                            val uri = androidx.core.content.FileProvider.getUriForFile(
-                                                context,
-                                                "${context.packageName}.fileprovider",
-                                                effect.file
-                                            )
-                                            val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
-                                                type = "application/pdf"
-                                                putExtra(android.content.Intent.EXTRA_STREAM, uri)
-                                                putExtra(android.content.Intent.EXTRA_SUBJECT, "Thai Auto OBD-II Inspection Report")
-                                                addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                            androidx.compose.runtime.LaunchedEffect(cleanScannerVm) {
+                                cleanScannerVm.uiEffect.collect { effect ->
+                                    when (effect) {
+                                        is com.example.presentation.screen.diagnostic.DiagnosticScannerUiEffect.SharePdfFile -> {
+                                            try {
+                                                val uri = androidx.core.content.FileProvider.getUriForFile(
+                                                    context,
+                                                    "${context.packageName}.fileprovider",
+                                                    effect.file
+                                                )
+                                                val shareIntent = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+                                                    type = "application/pdf"
+                                                    putExtra(android.content.Intent.EXTRA_STREAM, uri)
+                                                    putExtra(android.content.Intent.EXTRA_SUBJECT, "Thai Auto OBD-II Inspection Report")
+                                                    addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                                }
+                                                context.startActivity(android.content.Intent.createChooser(shareIntent, "แชร์รายงานผลการตรวจสภาพ (PDF)"))
+                                            } catch (e: Exception) {
+                                                android.util.Log.e("PDF", "Failed to share PDF", e)
                                             }
-                                            context.startActivity(android.content.Intent.createChooser(shareIntent, "แชร์รายงานผลการตรวจสภาพ (PDF)"))
-                                        } catch (e: Exception) {
-                                            android.util.Log.e("PDF", "Failed to share PDF", e)
                                         }
+                                        is com.example.presentation.screen.diagnostic.DiagnosticScannerUiEffect.ShowToast -> {
+                                            Toast.makeText(context, effect.message, Toast.LENGTH_SHORT).show()
+                                        }
+                                        else -> Unit
                                     }
-                                    is com.example.presentation.screen.diagnostic.DiagnosticScannerUiEffect.ShowToast -> {
-                                        Toast.makeText(context, effect.message, Toast.LENGTH_SHORT).show()
-                                    }
-                                    else -> Unit
                                 }
                             }
-                        }
 
-                        com.example.presentation.screen.diagnostic.DiagnosticScannerScreen(
-                            state = cleanState,
-                            onEvent = cleanScannerVm::onEvent
-                        )
-                    } else {
-                        DiagnosticScannerScreen(viewModel = viewModel)
+                            com.example.presentation.screen.diagnostic.DiagnosticScannerScreen(
+                                state = cleanState,
+                                onEvent = cleanScannerVm::onEvent,
+                                onNavigateToDtcDatabase = { showDtcSearchScreen = true }
+                            )
+                        } else {
+                            DiagnosticScannerScreen(viewModel = viewModel)
+                        }
                     }
-                }
                 2 -> PredictiveMaintenanceScreen(viewModel = viewModel)
                 3 -> {
                     if (isCleanArchMode) {
-                        val cleanTelemetryVm = remember {
+                        val cleanDashboardVm = remember {
                             val repo = com.example.data.repository.ObdDiagnosticRepositoryImpl()
-                            com.example.presentation.screen.telemetry.LiveTelemetryViewModel(
+                            com.example.presentation.screen.dashboard.TelemetryDashboardViewModel(
                                 streamLiveTelemetryUseCase = com.example.domain.usecase.StreamLiveTelemetryUseCase(repo)
                             )
                         }
-                        val cleanState by cleanTelemetryVm.uiState.collectAsState()
-                        com.example.presentation.screen.telemetry.LiveTelemetryScreen(
-                            state = cleanState,
-                            onEvent = cleanTelemetryVm::onEvent
+                        val cleanDashboardState by cleanDashboardVm.uiState.collectAsState()
+                        com.example.presentation.screen.dashboard.TelemetryDashboardScreen(
+                            state = cleanDashboardState,
+                            onEvent = cleanDashboardVm::onEvent
                         )
                     } else {
                         LiveTelemetryScreen(viewModel = viewModel)
@@ -658,10 +715,29 @@ fun MainAppContent(viewModel: MainViewModel) {
                 4 -> AiMechanicScreen(viewModel = viewModel)
                 5 -> MaintenanceScreen(viewModel = viewModel)
                 6 -> AboutScreen(viewModel = viewModel)
-                7 -> WidgetsScreen(viewModel = viewModel)
+                7 -> {
+                    if (isCleanArchMode) {
+                        val cleanDashboardVm = remember {
+                            val repo = com.example.data.repository.ObdDiagnosticRepositoryImpl()
+                            com.example.presentation.screen.dashboard.TelemetryDashboardViewModel(
+                                streamLiveTelemetryUseCase = com.example.domain.usecase.StreamLiveTelemetryUseCase(repo)
+                            )
+                        }
+                        val cleanDashboardState by cleanDashboardVm.uiState.collectAsState()
+                        com.example.presentation.screen.dashboard.TelemetryDashboardScreen(
+                            state = cleanDashboardState,
+                            onEvent = cleanDashboardVm::onEvent
+                        )
+                    } else {
+                        WidgetsScreen(viewModel = viewModel)
+                    }
+                }
                 8 -> ProfileScreen(viewModel = viewModel)
                 else -> HomeScreen(viewModel = viewModel)
             }
         }
     }
 }
+}
+
+
