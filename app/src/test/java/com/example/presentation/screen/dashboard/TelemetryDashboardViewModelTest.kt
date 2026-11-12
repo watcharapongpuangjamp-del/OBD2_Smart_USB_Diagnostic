@@ -29,12 +29,14 @@ class TelemetryDashboardViewModelTest {
     private val testDispatcher = StandardTestDispatcher()
     private val telemetryFlow = MutableSharedFlow<List<SensorReading>>()
 
-    private val fakeRepo = object : ObdDiagnosticRepository {
+    private val fakeRepo: ObdDiagnosticRepository = object : ObdDiagnosticRepository {
         override fun performFullSystemScan(): Flow<DiagnosticResult<DiagnosticSession>> = flow { }
         override suspend fun clearDtcCodes(): DiagnosticResult<Boolean> = DiagnosticResult.Success(true)
         override fun observeLiveTelemetry(): Flow<List<SensorReading>> = telemetryFlow
         override fun observeConnectionStatus(): Flow<String> = flow { emit("CONNECTED") }
         override suspend fun lookupDtcFault(code: String): DtcFault? = null
+    }
+
     private var activeViewModel: TelemetryDashboardViewModel? = null
 
     private fun createViewModel(): TelemetryDashboardViewModel {
@@ -173,5 +175,9 @@ class TelemetryDashboardViewModelTest {
         viewModel.onEvent(TelemetryDashboardUiEvent.ResetBuffers)
         testDispatcher.scheduler.advanceUntilIdle()
         assertTrue(viewModel.uiState.value.chartDataMap.isEmpty())
+
+        viewModel.onEvent(TelemetryDashboardUiEvent.ToggleStreaming)
+        testDispatcher.scheduler.advanceUntilIdle()
     }
 }
+
